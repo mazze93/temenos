@@ -6,8 +6,8 @@
 - [x] P3 orchestrator + CLI
 - [x] P4 control plane server
 - [x] P5 tests (18 passing)
-- [ ] P6 docs + deploy
-- [ ] P7 vendor submodules + validation (done: submodules added; validation pending)
+- [x] P6 docs + deploy (README, ARCHITECTURE, SECURITY, LICENSE, Dockerfile, compose, fly.toml, CI)
+- [x] P7 vendor submodules + validation (submodules pinned; 18 tests green; audit live)
 
 ## To resume
 

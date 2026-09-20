@@ -1,0 +1,24 @@
+# Reference deploy for Fly.io (Dockerfile-based). The control plane is
+# stateless; stratum is the durable store and lives elsewhere.
+app = "temenos"
+primary_region = "iad"
+
+[build]
+
+[env]
+  TEMENOS_LOG_ID = "temenos"
+  TEMENOS_MODE = "shadow"
+  # Provide STRATUM_TOKEN and TEMENOS_STRATUM_URL as secrets:
+  #   fly secrets set STRATUM_TOKEN=... TEMENOS_STRATUM_URL=https://stratum...
+
+[[services]]
+  internal_port = 8788
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443

@@ -1,0 +1,16 @@
+# Runs the temenos control plane. Stratum runs separately (its own Cloudflare
+# Worker or `wrangler dev`); point TEMENOS_STRATUM_URL at it and supply
+# STRATUM_TOKEN for authed writes.
+services:
+  temenos:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8788:8788"
+    environment:
+      TEMENOS_STRATUM_URL: "http://host.docker.internal:8787"   # wrangler dev on the host
+      STRATUM_TOKEN: "change-me"
+      TEMENOS_LOG_ID: "temenos"
+      TEMENOS_MODE: "shadow"
+    restart: unless-stopped

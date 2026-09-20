@@ -7,6 +7,7 @@ importable regardless of how temenos itself is installed.
 """
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 
@@ -30,16 +31,21 @@ def _site_packages() -> list[str]:
 
 
 def ensure(*names: str) -> list[str]:
-    """Import the vendored packages, raising a clear error if they are absent.
+    """Make the named packages importable, or raise a clear error.
 
-    Returns the list of submodule names that were successfully made importable.
+    First tries the vendored submodules; if a package is not vendored locally
+    (e.g. a container where aletheia/apatea were pip-installed), falls back to
+    a normal import. Returns the names resolved from the vendored tree.
     """
-    added = _site_packages()
-    missing = [n for n in names if n not in added]
-    if missing:
-        raise ImportError(
-            "missing vendored dependencies: "
-            + ", ".join(missing)
-            + "\nRun:  git submodule update --init --recursive"
-        )
-    return added
+    available = _site_packages()
+    missing = [n for n in names if n not in available]
+    for n in missing:
+        try:
+            importlib.import_module(n)   # may be pip-installed instead of vendored
+        except ImportError as e:
+            raise ImportError(
+                "missing vendored dependencies: "
+                + ", ".join(missing)
+                + "\nRun:  git submodule update --init --recursive"
+            ) from e
+    return available
