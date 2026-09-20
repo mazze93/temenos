@@ -1,0 +1,6 @@
+[submodule "vendor/aletheia"]
+	path = vendor/aletheia
+	url = https://github.com/mazze93/aletheia
+[submodule "vendor/apatea"]
+	path = vendor/apatea
+	url = https://github.com/mazze93/apatea

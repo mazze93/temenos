@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "temenos"
+version = "0.1.0"
+description = "Temenos — an evidence-gated runtime for autonomous agents. Binds aletheia (gate), apatea (adversary), stratum (ledger), stele (harness), and adaptive-response (structured output) into one auditable control plane."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Mazze LeCzzare Frazer" }]
+keywords = ["agent-security", "prompt-injection", "provenance", "audit", "evidence-gated", "governance"]
+dependencies = [
+    "pyyaml>=6.0",     # human-authored config/policy only — never in the gate path
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov"]
+
+[project.scripts]
+temenos = "temenos.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

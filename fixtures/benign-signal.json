@@ -1,0 +1,8 @@
+{
+  "id": "sig-002",
+  "content": "Update the README to document the rate-limit threshold of 100 requests per minute.",
+  "origin": "user",
+  "tool": "Edit",
+  "intended_action": "edit README.md",
+  "source": "user@example.com"
+}

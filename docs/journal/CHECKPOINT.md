@@ -1,13 +1,13 @@
 # CHECKPOINT
 
 - [x] P0 scaffold + journal
-- [ ] P1 data model + config
-- [ ] P2 tools (gate/adversary/policy/ledger)
-- [ ] P3 orchestrator + CLI
-- [ ] P4 control plane server
-- [ ] P5 tests
+- [x] P1 data model + config
+- [x] P2 tools (gate/adversary/policy/ledger)
+- [x] P3 orchestrator + CLI
+- [x] P4 control plane server
+- [x] P5 tests (18 passing)
 - [ ] P6 docs + deploy
-- [ ] P7 vendor submodules + validation
+- [ ] P7 vendor submodules + validation (done: submodules added; validation pending)
 
 ## To resume
 

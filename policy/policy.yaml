@@ -1,0 +1,21 @@
+# Temenos policy — the human-authored contract, not the model's opinion.
+#
+# `settings` governs how temenos runs; `policy.escalation` maps aletheia's
+# verdict to a human-facing disposition. Nothing here invents policy; edit it
+# deliberately and version it like code.
+
+settings:
+  # stratum worker base URL. Point this at `wrangler dev` locally, or the
+  # deployed worker in production.
+  stratum_base_url: "http://127.0.0.1:8787"
+  # The ledger log decisions are written to (auth-gated for non-demo logs).
+  log_id: "temenos"
+  # shadow: record everything, block nothing. enforce: a `stop` verdict blocks.
+  mode: "shadow"
+
+policy:
+  escalation:
+    # disposition assigned when aletheia's verdict is...
+    proceed: "observe"             # low risk, recorded for the audit trail
+    verify: "review"               # moderate — a human should inspect
+    stop: "approve_required"       # high — a human must set direction
