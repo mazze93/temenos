@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use Temenos in research, please cite this repository."
+title: "Temenos: an evidence-gated runtime for autonomous agents"
+type: software
+authors:
+  - family-names: "Frazer"
+    given-names: "Mazze LeCzzare"
+repository-code: "https://github.com/mazze93/temenos"
+license: MIT
+version: 0.1.0
+date-released: 2026-09-28
+keywords:
+  - agent security
+  - prompt injection
+  - provenance
+  - evidence
