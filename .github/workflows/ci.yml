@@ -11,11 +11,9 @@ permissions:
 
 jobs:
   test:
-    name: test
+    name: test + contracts
     runs-on: ubuntu-latest
     steps:
-      # Submodules are required (aletheia + apatea). They must be readable by
-      # the running actor — public, or a token with repo read on the submodules.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,6 +27,9 @@ jobs:
 
       - name: Install
         run: pip install -e ".[dev]"
+
+      - name: Validate normative artifacts
+        run: python tools/validate_artifacts.py
 
       - name: Test
         run: python -m pytest -q
