@@ -1,95 +1,101 @@
 # Architecture
 
-Temenos is not a monolith and not a rewrite. It is a thin, stdlib-first
-orchestration layer that gives four existing tools one coherent interface and,
-critically, one coherent **authority model**.
+Temenos is a thin orchestration layer around an explicit authority boundary.
 
-```
-                        ┌────────────────────────────────────────────┐
-                        │                 Temenos                     │
-                        │                                            │
-  ┌───────────┐         │  ┌─────────┐   ┌────────┐   ┌───────────┐  │
-  │  signal   │ ────────▶│  │  gate   │──▶│ policy │──▶│  ledger   │──┼──▶ stratum
-  │ (PR body, │         │  │ aletheia│   │ (YAML) │   │ (client)  │  │    (append)
-  │  tool out)│         │  └─────────┘   └────────┘   └───────────┘  │
-  └───────────┘         │        ▲                        │         │
-                        │        │                        ▼         │
-                        │  ┌─────────┐               ┌───────────┐  │
-                        │  │adversary│               │  control  │──┼──▶ HTTP
-                        │  │ apatea  │               │  plane    │  │    /decide
-                        │  └─────────┘               └───────────┘  │
-                        └────────────────────────────────────────────┘
+```text
+                           TEMENOS RUNTIME
+┌──────────┐     ┌───────────────┐     ┌─────────────┐     ┌──────────┐
+│  signal  │ ──▶ │ Aletheia gate │ ──▶ │ policy.yaml │ ──▶ │ Stratum  │
+└──────────┘     └───────────────┘     └─────────────┘     └────┬─────┘
+                         ▲                                      │
+                         │                                      ▼
+                   ┌──────────┐                           human review
+                   │  Apatea  │
+                   │  audit   │
+                   └──────────┘
 ```
 
-## Components
+## Runtime layers
 
-### gate — aletheia (vendored)
+### Signal
 
-Provenance is the load-bearing idea. Aletheia maps each origin to a trust class
-(`user`/`agent`/`file` = trusted, `mcp_tool` = semi-trusted, `web_*`/`clipboard` =
-untrusted) and scores content for governing parameters, urgency, prescriptive
-framing, authority claims, and structural mimicry. Judging and enforcing are
-separate modules by design; temenos preserves that separation.
+A `Signal` is content that may influence an action: PR text, a web result,
+tool output, a commit message, or another external artifact. Provenance enters
+with the signal; Temenos does not infer trusted origin from persuasive language.
 
-`temenos/gate.py` builds aletheia's `Event` from a `Signal`, runs `assess`, then
-asks aletheia's `decide` for `proceed`/`verify`/`stop`.
+### Gate
 
-### policy — deterministic
+`temenos/gate.py` adapts a Signal into Aletheia, which assesses prompt-injection
+risk and governing parameters. Temenos normalizes the result but does not add a
+second hidden scoring system.
 
-A human-authored YAML file maps the gate verdict to a **disposition**:
+### Policy
 
-```
-observe            proceed        recorded, nothing else
-review             verify          a human should inspect
-approve_required   stop            a human must set direction
-```
+`policy/policy.yaml` maps `proceed / verify / stop` to a human-facing
+disposition. It is deterministic, versioned, and human-authored.
 
-There is no DSL and no model in this path. The ordering is the policy, and it is
-versioned like code. The verdict's evidence is shaped here, so the ledger write
-is a pure append of an already-validated record.
+### Ledger
 
-### ledger — stratum
+`temenos/ledger.py` shapes the verdict into a Stratum decision event. Status is
+derived by Stratum rather than stored as mutable state in Temenos. Failed writes
+surface as unresolved state.
 
-Stratum's contract is tiny: append an immutable event, or read the derived
-projection. Temenos speaks it exactly — snake_case at the wire, `evidence` entries
-carry `checked_at: null` when cited-but-not-checked. A `checked_at` is non-null
-only when temenos actually performed the check, so "verified" is never a synonym
-for "trusted because I said so."
+### Adversary
 
-The ledger client is `urllib`-only deliberately: the audit path — the one
-component that must never fail to write — has no third-party supply chain.
+Apatea is out-of-band. It searches transformations and invariants for cases in
+which the gate becomes inconsistent or blind. An audit is evidence about the
+gate, not proof that no evasion exists.
 
-### adversary — apatea
+## Repository contract layers
 
-A gate is judged by what it stops; nothing measures what it misses. Apatea holds
-stated invariants (monotonicity, extent stability, determinism) and searches
-**transformations** of real inputs for the cases where aletheia's assessor goes
-blind. Temenos points it at the vendored gate via `ALETHEIA_HOME`, so `temenos
-audit` is a one-command answer to "is my gate still honest?"
+Temenos also separates runtime implementation from repository authority:
 
-### control plane — server
-
-A stdlib `ThreadingHTTPServer` exposes three endpoints (`/health`, `/decide`,
-`/queue`). It is the programmatic surface, not the dashboard — the human review
-UI already exists as stratum's Atrium. Temenos deliberately does not re-ship one.
-
-## Authority model
-
-The single invariant the whole system exists to preserve:
-
-```
-automation scope  ≤  evidence quality  ×  policy clarity
+```text
+schemas/      machine-readable artifact contracts
+policy/       human-authored operational rules
+tests/        executable behavior claims
+docs/adr/     consequential decisions
+docs/         explanations and guides
+research/     analysis; never automatically normative
+assets/       communication layer
 ```
 
-When evidence is thin or policy is ambiguous, temenos **abstains and escalates**
-rather than inferring permission. Every field that could govern an action must
-have a declared source, and untrusted sources cannot supply one without the
-human knowing.
+The ordering is deliberate. See
+[`docs/architecture/AUTHORITY.md`](docs/architecture/AUTHORITY.md).
 
-## What is new vs. reused
+## Provenance
 
-Temenos adds the orchestration layer and the unified authority model. The four
-tools are pre-existing, separately-maintained systems with their own tests and
-threat models. This is a feature, not a shortcut: the gate, the adversary, and
-the ledger are independently auditable, and temenos inherits their guarantees
-instead of re-implementing them.
+The provenance schema records enough context to reconstruct how an artifact was
+produced: inputs and hashes, workflow version, optional model metadata, tools,
+transformations, evaluations, and human edits.
+
+Reconstruction is the goal; deterministic replay of stochastic inference is not
+assumed.
+
+## Evaluation
+
+Evaluation methods remain disaggregated:
+
+- deterministic validation;
+- behavioral/adversarial regression;
+- model-based evaluation;
+- human review.
+
+No method automatically grants authority to the artifact being evaluated.
+
+## Adjacent stack components
+
+Stele and adaptive-response are architecturally compatible with Temenos but are
+not part of the current executable runtime. Integration becomes normative only
+when implementation, tests, and an ADR establish it.
+
+## Security boundary
+
+The principal invariant remains:
+
+```text
+automation scope ≤ evidence quality × policy clarity
+```
+
+When evidence is thin or policy is ambiguous, Temenos may abstain or escalate.
+It must not manufacture permission.
