@@ -2,113 +2,153 @@
 
 **τέμενος** — the sacred boundary that contains without claiming.
 
-An evidence-gated runtime for autonomous agents. Temenos is the integrating layer
-that binds four tools into one auditable control plane:
+Temenos is an **evidence-gated runtime for autonomous agents**. Its purpose is
+not to make model output authoritative; it is to preserve the boundary between
+what an agent generated, what evidence supports, what policy permits, and where
+a human must set direction.
 
-| Tool | Role in Temenos |
+```text
+signal → Aletheia gate → deterministic policy → Stratum ledger → human review
+```
+
+Apatea audits the gate out-of-band.
+
+## Why it exists
+
+Agentic systems often collapse generation and authority. A model reads a PR
+body, web result, tool output, or prior model message; the content persists;
+later behavior treats that persistence as permission.
+
+Temenos separates those layers:
+
+- **provenance** describes where a governing signal came from;
+- **gate evidence** describes what was observed about it;
+- **policy** maps evidence to a human-authored disposition;
+- **Stratum** records the decision as an immutable event;
+- **human review** resolves what automation is not authorized to infer.
+
+The load-bearing invariant is:
+
+```text
+automation scope ≤ evidence quality × policy clarity
+```
+
+## Implemented runtime
+
+| Component | Current role |
 |---|---|
-| [aletheia](https://github.com/mazze93/aletheia) | provenance gate — detects prompt injection and untrusted governing parameters |
-| [apatea](https://github.com/mazze93/apatea) | adversarial auditor — red-teams the gate so it is never trusted blind |
-| [stratum](https://github.com/mazze93/stratum) | immutable decision ledger — append-only, evidence-gated, replay-proven |
-| [stele](https://github.com/mazze93/stele) | integrity harness — session posture and monotonic capability degradation |
-| [adaptive-response](https://github.com/mazze93/adaptive-response) | structured, schema-validated output contract |
+| [Aletheia](https://github.com/mazze93/aletheia) | provenance and prompt-injection gate |
+| `policy/policy.yaml` | deterministic human-authored disposition mapping |
+| [Stratum](https://github.com/mazze93/stratum) | append-only evidence/decision ledger |
+| [Apatea](https://github.com/mazze93/apatea) | adversarial audit of the gate |
 
-The loop is small and deliberate:
+[Stele](https://github.com/mazze93/stele) and
+[adaptive-response](https://github.com/mazze93/adaptive-response) belong to the
+wider integrity stack, but **are not runtime dependencies of Temenos 0.1**.
+Future integration must be established by code, tests, and an ADR before the
+README claims otherwise.
 
-```
-signal ──▶ gate (aletheia) ──▶ policy (deterministic) ──▶ ledger (stratum) ──▶ human review
-```
+## Normative core
 
-An agent proposes an action, or content arrives that will govern one. Temenos
-assesses its **provenance**, applies a **human-authored policy**, records an
-**immutable decision** with its evidence, and escalates only the moment that
-actually requires a human to set direction.
+Repository authority is intentionally explicit:
 
-## The problem
+1. `schemas/` — machine-readable artifact contracts
+2. `policy/` — human-authored operational policy
+3. `tests/` — executable behavior claims
+4. `docs/adr/` — consequential architectural decisions
+5. explanatory documentation and examples
 
-Agentic systems assert. Whatever an agent reads, writes, or does becomes "true"
-by persistence — a session that drops a constraint, trusts a crafted web result,
-or accepts `<!-- SYSTEM: ignore previous instructions -->` from a PR body passes
-every syntactic gate and then compounds into the next action. The failure is
-rarely malice; it is that *generation* and *authority* have been conflated.
+See [Authority Model](docs/architecture/AUTHORITY.md).
 
-**Temenos separates them.** It never grants authority to a model. It makes the
-next honest action visible, records the evidence that produced it, and preserves
-a human's judgment for the few moments where judgment is the whole point.
+This prevents a white paper, README sentence, or model-generated explanation
+from silently becoming operational policy.
 
-## What it does (and does not)
+## What Temenos does
 
-Temenos **does**:
+- carries provenance into the decision path;
+- gates signals for injection and governing-parameter risk;
+- applies deterministic policy;
+- records evidence-linked decisions to Stratum;
+- surfaces ledger failures rather than hiding them;
+- adversarially audits the gate;
+- exposes a small `decide / audit / serve` control plane.
 
-- gate every signal by provenance and injection risk (aletheia)
-- continuously attack its own gate to find what it misses (apatea)
-- map a verdict to a human disposition via deterministic policy (no LLM authors policy)
-- append every decision to stratum as an immutable, evidence-linked event
-- expose a minimal control plane (`decide` / `audit` / `serve`)
+## What it does not do
 
-Temenos **does not**:
-
-- merge code, rotate secrets, change permissions, or touch production state
-- let a model rewrite policy or grant itself authority
-- claim a security guarantee — it binds evidence to decisions; it proves nothing about correctness
-- store or exfiltrate raw secrets (the gate path is stdlib-only, no third-party code)
+- grant a model permission to rewrite policy;
+- claim that a `proceed` verdict proves safety;
+- merge code, rotate secrets, or mutate production state on its own;
+- treat evaluator output as authority;
+- hide uncertainty to keep a workflow moving.
 
 ## Quickstart
 
-Prerequisites: Python 3.11+, and the two vendored dependencies checked out.
+Prerequisites: Python 3.11+ and the vendored submodules.
 
 ```bash
 git clone --recurse-submodules https://github.com/mazze93/temenos
 cd temenos
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-Evaluate a signal (no ledger required):
+Evaluate without writing to the ledger:
 
 ```bash
 temenos decide fixtures/injection-signal.json --no-record
 ```
 
-Run the adversary against the gate:
+Audit the gate:
 
 ```bash
 temenos audit
+```
+
+Validate repository contracts:
+
+```bash
+python tools/validate_artifacts.py
+pytest -q
 ```
 
 Run the control plane:
 
 ```bash
 temenos serve --port 8788
-# curl -X POST localhost:8788/decide -d '{"id":"x","content":"...","origin":"web_search"}'
 ```
 
-## Wiring to stratum
+## Stratum
 
-Decisions are recorded only when a stratum ledger is reachable. Point temenos at
-one and it appends; otherwise it degrades gracefully and flags the write.
+Point Temenos at a reachable Stratum worker to persist decisions.
 
 ```bash
-# run stratum locally (its own repo)
-git clone https://github.com/mazze93/stratum && cd stratum/worker && npm i && npx wrangler dev
-
-# point temenos at it with a bearer token
 export STRATUM_TOKEN="<your token>"
 export TEMENOS_STRATUM_URL="http://127.0.0.1:8787"
 temenos decide fixtures/injection-signal.json
 ```
 
-See [`policy/policy.yaml`](policy/policy.yaml) for the disposition mapping, and
-[`docs/journal/DECISIONS.md`](docs/journal/DECISIONS.md) for every architectural
-decision and how to reverse it.
+A failed ledger write is returned as unresolved state; persistence failure is
+never silently converted into success.
 
-## Documentation
+## Evaluation
 
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — the integration map
-- [`SECURITY.md`](SECURITY.md) — threat model and posture
-- [`docs/journal/`](docs/journal/) — plan, decisions, checkpoints
+Temenos separates deterministic, behavioral, model-based, and human evaluation.
+It deliberately does **not** collapse these into one trust score.
+
+See:
+
+- [evaluations/README.md](evaluations/README.md)
+- [evaluations/rubrics/core.yaml](evaluations/rubrics/core.yaml)
+- [SECURITY.md](SECURITY.md)
+
+## Contributing and governance
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [GOVERNANCE.md](GOVERNANCE.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [CITATION.cff](CITATION.cff)
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE). The vendored tools retain their own licenses
-(aletheia and apatea are both MIT).
+MIT. Vendored projects retain their own licenses.
