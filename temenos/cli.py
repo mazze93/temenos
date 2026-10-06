@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -70,6 +71,37 @@ def cmd_serve(args, temenos: Temenos) -> int:
     return 0
 
 
+def cmd_snyk(args, temenos: Temenos) -> int:
+    from .snyk import collect, evaluate, GateError
+    try:
+        key = bytes.fromhex(os.environ.get('TEMENOS_EVIDENCE_KEY', ''))
+        if len(key) < 32:
+            raise GateError('missing runner key')
+        scope = dict(artifact=Path(args.artifact), commit=args.commit,
+                     target=args.target, org=args.org, key=key)
+        if args.cmd == 'snyk-collect':
+            if Path(args.output).exists():
+                raise GateError('receipt output already exists')
+            envelope = collect(**scope)
+            # Exclusive creation: never overwrite the scanned artifact or an old receipt.
+            with open(args.output, 'x', encoding='utf-8') as stream:
+                json.dump(envelope, stream, indent=2, allow_nan=False)
+            print(json.dumps({'collected': True, 'receipt': args.output,
+                              'scope': 'collection_only_not_release_approval'}))
+            return 0 if envelope['receipt']['failure'] is None else 2
+        receipt_path = Path(args.receipt)
+        if receipt_path.stat().st_size > 12 * 1024 * 1024:
+            raise GateError('receipt too large')
+        envelope = json.loads(receipt_path.read_text())
+        result = evaluate(envelope, **scope, ledger=temenos.ledger)
+        print(json.dumps(result))
+        return 0 if result['eligible'] else 2
+    except (OSError, ValueError, TypeError):
+        # Input errors are denials; never echo token-bearing process output.
+        print(json.dumps({'eligible': False, 'reasons': ['invalid_or_unavailable_evidence']}))
+        return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="temenos", description=__doc__)
     p.add_argument("--config", default=None, help="path to config YAML/JSON")
@@ -90,6 +122,18 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8788)
     s.set_defaults(func=cmd_serve)
+
+    for command in ('snyk-collect', 'release-check'):
+        q = sub.add_parser(command, help='collect or gate trusted-runner Snyk IaC evidence')
+        q.add_argument('--artifact', required=True, help='one standalone YAML or Terraform plan JSON')
+        q.add_argument('--commit', required=True, help='full commit SHA attested by the trusted runner')
+        q.add_argument('--target', required=True, help='explicit promotion target identifier')
+        q.add_argument('--org', required=True, help='Snyk organization ID or slug')
+        if command == 'snyk-collect':
+            q.add_argument('--output', required=True, help='new signed receipt file')
+        else:
+            q.add_argument('--receipt', required=True, help='signed receipt to check')
+        q.set_defaults(func=cmd_snyk)
 
     return p
 

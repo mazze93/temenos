@@ -1,0 +1,52 @@
+name: Snyk evidence gate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: snyk-evidence
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12'
+      - run: pip install .
+      - uses: snyk/actions/setup@b075801f26076be9bb50521154cafab73f44da0c
+        with:
+          snyk-version: 'v1.1307.4'
+      - name: Collect and gate (unsafe fixture must deny)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          TEMENOS_EVIDENCE_KEY: ${{ secrets.TEMENOS_EVIDENCE_KEY }}
+          STRATUM_TOKEN: ${{ secrets.STRATUM_TOKEN }}
+          TEMENOS_STRATUM_URL: ${{ vars.TEMENOS_STRATUM_URL }}
+          TEMENOS_LOG_ID: ${{ vars.TEMENOS_LOG_ID }}
+          SNYK_ORG_ID: ${{ vars.SNYK_ORG_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${SNYK_TOKEN:?}" "${TEMENOS_EVIDENCE_KEY:?}" "${STRATUM_TOKEN:?}"
+          : "${TEMENOS_STRATUM_URL:?}" "${TEMENOS_LOG_ID:?}" "${SNYK_ORG_ID:?}"
+          scope=(--artifact examples/snyk/deployment.yaml --commit "$GITHUB_SHA" --target sandbox-demonstration --org "$SNYK_ORG_ID")
+          # Run the gate even if collection reports a scanner error.
+          temenos snyk-collect "${scope[@]}" --output receipt.json || true
+          temenos release-check "${scope[@]}" --receipt receipt.json | tee decision.json
+      - name: Evidence predicate satisfied
+        run: echo 'Snyk evidence predicate satisfied; no deployment is implemented.'
+      - name: Retain public-fixture evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: snyk-evidence-${{ github.sha }}
+          path: |
+            receipt.json
+            decision.json
+          retention-days: 14
+          if-no-files-found: warn

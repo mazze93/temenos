@@ -152,3 +152,10 @@ See:
 ## License
 
 MIT. Vendored projects retain their own licenses.
+
+### Snyk evidence gate
+
+`temenos snyk-collect` and `temenos release-check` make a fresh, scope-bound Snyk
+IaC result and acknowledged Stratum decision mandatory for an evidence predicate.
+See [the trust boundary, reproduction cases, and live setup](docs/architecture/SNYK_EVIDENCE.md).
+This is not a deployment authorization or a post-deployment verification claim.

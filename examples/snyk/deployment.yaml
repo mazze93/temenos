@@ -1,0 +1,12 @@
+# Deliberately unsafe scan fixture. Never deploy.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: temenos-denial-demo
+spec:
+  hostNetwork: true
+  containers:
+    - name: demo
+      image: nginx:latest
+      securityContext:
+        privileged: true
