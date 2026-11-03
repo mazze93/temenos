@@ -65,11 +65,15 @@ temenos release-check --artifact examples/snyk/deployment.yaml \
   --receipt receipt.json
 ```
 
-The fixture is intentionally privileged: expect findings, exit 2 from release-check,
-and a recorded denial. Never deploy it. Inspect receipt and decision together to
-distinguish findings from authentication, network, parser, or ledger failures.
-The manual `Snyk evidence gate` workflow runs this same path on main only; its
-expected denial makes the job red and prevents the next eligibility step.
+The `deployment.yaml` fixture is intentionally privileged: expect Snyk exit 1,
+release-check exit 2, and a recorded denial. The `configmap-clean.yaml` fixture
+is a candidate positive control: the live scanner must return exit 0, with a
+recorded eligibility decision. Never deploy either fixture. The manual workflow
+runs on `main` only and requires **both** outcomes. Its verifier inspects the
+signed receipt's scanner exit/status, Snyk issue collection, Temenos gate
+status and Stratum acknowledgement; it fails on scanner error (exit 2/3),
+missing results or an unacknowledged record. A green run means these two gate
+cases held, not that any cloud change was authorized or deployed.
 
 Before enabling it, create a `snyk-evidence` environment restricted to reviewed
 main commits, require an owning-team reviewer, and configure the above secrets
@@ -98,3 +102,11 @@ eligibility result into a reusable authorization token. CLI output is bounded
 for acceptance, but subprocess capture is not a hard memory sandbox.
 
 Integration contract: [Snyk IaC CLI](https://docs.snyk.io/developer-tools/snyk-cli/commands/iac-test).
+
+## Live acceptance record
+
+A completed GitHub Actions run must expose an approved environment, the run's
+commit, non-secret receipts and matching Stratum readback. Record the run URL,
+scan version, organization, ledger event IDs, and both case verdicts here only
+after a real provider run. At present no live result is asserted by this document.
+The protected environment's secrets are never added to this document.
