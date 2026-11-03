@@ -1,0 +1,9 @@
+# Positive control candidate: expected to have no Snyk IaC findings.
+# Not a deployment-ready workload; verify the actual scanner result before claiming success.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temenos-clean-control
+  namespace: default
+data:
+  purpose: snyk-evidence-positive-control
