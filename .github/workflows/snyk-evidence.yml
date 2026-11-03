@@ -1,4 +1,4 @@
-name: Snyk evidence gate
+name: Snyk paired evidence gate
 on:
   workflow_dispatch:
 permissions:
@@ -21,9 +21,21 @@ jobs:
       - uses: snyk/actions/setup@b075801f26076be9bb50521154cafab73f44da0c
         with:
           snyk-version: 'v1.1307.4'
-      - name: Collect and gate (unsafe fixture must deny)
+      - name: Collect both Snyk receipts
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          TEMENOS_EVIDENCE_KEY: ${{ secrets.TEMENOS_EVIDENCE_KEY }}
+          SNYK_ORG_ID: ${{ vars.SNYK_ORG_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${SNYK_TOKEN:?}" "${TEMENOS_EVIDENCE_KEY:?}" "${SNYK_ORG_ID:?}"
+          mkdir -p evidence
+          scope=(--commit "$GITHUB_SHA" --target sandbox-demonstration --org "$SNYK_ORG_ID")
+          temenos snyk-collect --artifact examples/snyk/configmap-clean.yaml "${scope[@]}" --output evidence/clean-receipt.json
+          temenos snyk-collect --artifact examples/snyk/deployment.yaml "${scope[@]}" --output evidence/unsafe-receipt.json
+      - name: Evaluate both against Stratum
+        env:
           TEMENOS_EVIDENCE_KEY: ${{ secrets.TEMENOS_EVIDENCE_KEY }}
           STRATUM_TOKEN: ${{ secrets.STRATUM_TOKEN }}
           TEMENOS_STRATUM_URL: ${{ vars.TEMENOS_STRATUM_URL }}
@@ -32,21 +44,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${SNYK_TOKEN:?}" "${TEMENOS_EVIDENCE_KEY:?}" "${STRATUM_TOKEN:?}"
-          : "${TEMENOS_STRATUM_URL:?}" "${TEMENOS_LOG_ID:?}" "${SNYK_ORG_ID:?}"
-          scope=(--artifact examples/snyk/deployment.yaml --commit "$GITHUB_SHA" --target sandbox-demonstration --org "$SNYK_ORG_ID")
-          # Run the gate even if collection reports a scanner error.
-          temenos snyk-collect "${scope[@]}" --output receipt.json || true
-          temenos release-check "${scope[@]}" --receipt receipt.json | tee decision.json
-      - name: Evidence predicate satisfied
-        run: echo 'Snyk evidence predicate satisfied; no deployment is implemented.'
-      - name: Retain public-fixture evidence
+          : "${TEMENOS_EVIDENCE_KEY:?}" "${STRATUM_TOKEN:?}" "${TEMENOS_STRATUM_URL:?}" "${TEMENOS_LOG_ID:?}" "${SNYK_ORG_ID:?}"
+          scope=(--commit "$GITHUB_SHA" --target sandbox-demonstration --org "$SNYK_ORG_ID")
+          set +e
+          temenos release-check --artifact examples/snyk/configmap-clean.yaml "${scope[@]}" --receipt evidence/clean-receipt.json > evidence/clean-decision.json
+          clean_exit=$?
+          temenos release-check --artifact examples/snyk/deployment.yaml "${scope[@]}" --receipt evidence/unsafe-receipt.json > evidence/unsafe-decision.json
+          unsafe_exit=$?
+          set -e
+          python tools/assert_snyk_demo.py \
+            --clean-receipt evidence/clean-receipt.json \
+            --clean-decision evidence/clean-decision.json --clean-exit "$clean_exit" \
+            --unsafe-receipt evidence/unsafe-receipt.json \
+            --unsafe-decision evidence/unsafe-decision.json --unsafe-exit "$unsafe_exit"
+      - name: Preserve demonstration receipts and decisions
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: snyk-evidence-${{ github.sha }}
-          path: |
-            receipt.json
-            decision.json
+          name: snyk-paired-evidence-${{ github.sha }}
+          path: evidence/*.json
           retention-days: 14
           if-no-files-found: warn
